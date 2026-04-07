@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  nickname    String
+  name        String
+  birthdate   String
+  country     String   @default("KR")
+  marketing   Boolean  @default(false)
+  balance     Float    @default(10000000)
+  createdAt   DateTime @default(now())
+  orders      Order[]
+  positions   Position[]
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  userId    String
+  symbol    String
+  type      String
+  amount    Float
+  price     Float
+  quantity  Float
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Position {
+  id             String   @id @default(cuid())
+  userId         String
+  symbol         String
+  type           String   // 'long' or 'short'
+  leverage       Int
+  margin         Float    // 증거금
+  entryPrice     Float    // 진입가
+  quantity       Float    // 수량
+  liquidationPrice Float  // 청산가
+  status         String   @default("open") // 'open' or 'closed'
+  closePrice     Float?   // 청산/종료가
+  pnl            Float?   // 최종 손익
+  createdAt      DateTime @default(now())
+  closedAt       DateTime?
+  user           User     @relation(fields: [userId], references: [id])
+}
