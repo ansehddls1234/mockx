@@ -19,18 +19,11 @@ export function useBinanceCandles(symbol: string, interval: string) {
     setCandles([])
 
     // 초기 캔들 데이터 로드
-    fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=500`)
+    fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=100`)
       .then(res => res.json())
       .then(data => {
         if (!Array.isArray(data)) return
-        const parsed: Candle[] = data.map((k: unknown[]) => ({
-          time:  Math.floor((k[0] as number) / 1000) as UTCTimestamp,
-          open:  parseFloat(k[1] as string),
-          high:  parseFloat(k[2] as string),
-          low:   parseFloat(k[3] as string),
-          close: parseFloat(k[4] as string),
-        }))
-        setCandles(parsed)
+        setCandles(data as Candle[])
       })
 
     // 2초마다 최신 캔들 폴링
@@ -38,15 +31,8 @@ export function useBinanceCandles(symbol: string, interval: string) {
       fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=2`)
         .then(res => res.json())
         .then(data => {
-          if (!Array.isArray(data)) return
-          const k = data[data.length - 1] as unknown[]
-          const candle: Candle = {
-            time:  Math.floor((k[0] as number) / 1000) as UTCTimestamp,
-            open:  parseFloat(k[1] as string),
-            high:  parseFloat(k[2] as string),
-            low:   parseFloat(k[3] as string),
-            close: parseFloat(k[4] as string),
-          }
+          if (!Array.isArray(data) || !data.length) return
+          const candle = data[data.length - 1] as Candle
           setCandles(prev => {
             if (!prev.length) return [candle]
             const last = prev[prev.length - 1]

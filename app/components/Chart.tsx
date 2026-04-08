@@ -1,18 +1,26 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { createChart, ColorType, CandlestickSeries, LineSeries, IChartApi, ISeriesApi } from 'lightweight-charts'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createChart,
+  ColorType,
+  CandlestickSeries,
+  LineSeries,
+  IChartApi,
+  ISeriesApi,
+  UTCTimestamp,
+} from 'lightweight-charts'
 import type { IPriceLine } from 'lightweight-charts'
 import { useBinanceCandles } from '../hooks/useBinanceCandles'
 
 const INTERVALS = [
-  { label: '1분',  value: '1m'  },
-  { label: '5분',  value: '5m'  },
+  { label: '1분', value: '1m' },
+  { label: '5분', value: '5m' },
   { label: '15분', value: '15m' },
-  { label: '1시간',value: '1h'  },
-  { label: '4시간',value: '4h'  },
-  { label: '1일',  value: '1d'  },
-  { label: '1주',  value: '1w'  },
+  { label: '1시간', value: '1h' },
+  { label: '4시간', value: '4h' },
+  { label: '1일', value: '1d' },
+  { label: '1주', value: '1w' },
 ]
 
 function calcMA(data: number[], period: number): (number | null)[] {
@@ -32,32 +40,67 @@ interface Position {
   leverage: number
 }
 
-export default function Chart({ symbol = 'BTCUSDT', positions = [] }: { symbol?: string; positions?: Position[] }) {
+type Candle = {
+  time: UTCTimestamp
+  open: number
+  high: number
+  low: number
+  close: number
+}
 
+export default function Chart({
+  symbol = 'BTC-USDT',
+  positions = [],
+}: {
+  symbol?: string
+  positions?: Position[]
+}) {
   const getPriceFormat = (price: number) => {
-    if (price >= 1000)  return { minMove: 0.01,      precision: 2 }
-    if (price >= 1)     return { minMove: 0.0001,    precision: 4 }
-    if (price >= 0.01)  return { minMove: 0.00001,   precision: 5 }
-    return                     { minMove: 0.0000001, precision: 7 }
+    if (price >= 1000) return { minMove: 0.01, precision: 2 }
+    if (price >= 1) return { minMove: 0.0001, precision: 4 }
+    if (price >= 0.01) return { minMove: 0.00001, precision: 5 }
+    return { minMove: 0.0000001, precision: 7 }
   }
 
-  const chartRef         = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<HTMLDivElement>(null)
   const chartInstanceRef = useRef<IChartApi | null>(null)
-  const candleSeriesRef  = useRef<ISeriesApi<'Candlestick'> | null>(null)
-  const ma5Ref           = useRef<ISeriesApi<'Line'> | null>(null)
-  const ma20Ref          = useRef<ISeriesApi<'Line'> | null>(null)
-  const ma60Ref          = useRef<ISeriesApi<'Line'> | null>(null)
-  const initializedRef   = useRef(false)
-  const priceLinesRef    = useRef<IPriceLine[]>([])
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const ma5Ref = useRef<ISeriesApi<'Line'> | null>(null)
+  const ma20Ref = useRef<ISeriesApi<'Line'> | null>(null)
+  const ma60Ref = useRef<ISeriesApi<'Line'> | null>(null)
+  const initializedRef = useRef(false)
+  const priceLinesRef = useRef<IPriceLine[]>([])
 
   const [interval, setInterval] = useState('1m')
-  const [showMA5,  setShowMA5]  = useState(true)
+  const [showMA5, setShowMA5] = useState(true)
   const [showMA20, setShowMA20] = useState(true)
   const [showMA60, setShowMA60] = useState(true)
 
   const { candles } = useBinanceCandles(symbol, interval)
 
-  // 차트 초기화
+  const safeCandles = useMemo<Candle[]>(() => {
+    if (!Array.isArray(candles)) return []
+    return candles
+      .filter(
+        (c: any) =>
+          c &&
+          Number.isFinite(Number(c.time)) &&
+          Number.isFinite(Number(c.open)) &&
+          Number.isFinite(Number(c.high)) &&
+          Number.isFinite(Number(c.low)) &&
+          Number.isFinite(Number(c.close))
+      )
+      .map((c: any) => ({
+        time: Number(c.time) as UTCTimestamp,
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+      }))
+      .sort((a, b) => a.time - b.time)
+      .filter((c, i, arr) => i === 0 || c.time > arr[i - 1].time)
+  }, [candles])
+
   useEffect(() => {
     if (!chartRef.current) return
     if (chartInstanceRef.current) return
@@ -79,132 +122,180 @@ export default function Chart({ symbol = 'BTCUSDT', positions = [] }: { symbol?:
         vertLine: { color: 'rgba(255,255,255,0.2)' },
         horzLine: { color: 'rgba(255,255,255,0.2)' },
       },
-      width:  chartRef.current.clientWidth  || 800,
+      width: chartRef.current.clientWidth || 800,
       height: chartRef.current.clientHeight || 500,
     })
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor:         '#00d4aa',
-      downColor:       '#ff4d6a',
-      borderUpColor:   '#00d4aa',
+      upColor: '#00d4aa',
+      downColor: '#ff4d6a',
+      borderUpColor: '#00d4aa',
       borderDownColor: '#ff4d6a',
-      wickUpColor:     '#00d4aa',
-      wickDownColor:   '#ff4d6a',
+      wickUpColor: '#00d4aa',
+      wickDownColor: '#ff4d6a',
     })
 
-    const ma5  = chart.addSeries(LineSeries, { color: '#f0b90b', lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
-    const ma20 = chart.addSeries(LineSeries, { color: '#7b61ff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
-    const ma60 = chart.addSeries(LineSeries, { color: '#ff4d6a', lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
+    const ma5 = chart.addSeries(LineSeries, {
+      color: '#f0b90b',
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    })
+
+    const ma20 = chart.addSeries(LineSeries, {
+      color: '#7b61ff',
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    })
+
+    const ma60 = chart.addSeries(LineSeries, {
+      color: '#ff4d6a',
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    })
 
     chartInstanceRef.current = chart
-    candleSeriesRef.current  = candleSeries
-    ma5Ref.current  = ma5
+    candleSeriesRef.current = candleSeries
+    ma5Ref.current = ma5
     ma20Ref.current = ma20
     ma60Ref.current = ma60
 
     const handleResize = () => {
-      if (chartRef.current) {
-        chart.applyOptions({
-          width:  chartRef.current.clientWidth  || 800,
-          height: chartRef.current.clientHeight || 500,
-        })
-      }
+      if (!chartRef.current || !chartInstanceRef.current) return
+      chartInstanceRef.current.applyOptions({
+        width: chartRef.current.clientWidth || 800,
+        height: chartRef.current.clientHeight || 500,
+      })
     }
+
     window.addEventListener('resize', handleResize)
 
     return () => {
       window.removeEventListener('resize', handleResize)
       chart.remove()
       chartInstanceRef.current = null
-      candleSeriesRef.current  = null
-      ma5Ref.current   = null
-      ma20Ref.current  = null
-      ma60Ref.current  = null
-      priceLinesRef.current  = []
+      candleSeriesRef.current = null
+      ma5Ref.current = null
+      ma20Ref.current = null
+      ma60Ref.current = null
+      priceLinesRef.current = []
       initializedRef.current = false
     }
   }, [])
 
-  // 인터벌 or 심볼 바뀌면 초기화
   useEffect(() => {
     initializedRef.current = false
   }, [interval, symbol])
 
-  // 데이터 업데이트
   useEffect(() => {
-    if (!candleSeriesRef.current || !candles.length) return
+    if (!candleSeriesRef.current) return
+    if (!safeCandles.length) return
 
-    const closes = candles.map(c => c.close)
-    const times  = candles.map(c => c.time)
+    const closes = safeCandles.map(c => c.close)
+    const times = safeCandles.map(c => c.time)
+
+    const lastPrice = safeCandles[safeCandles.length - 1].close
+    const fmt = getPriceFormat(lastPrice)
+
+    candleSeriesRef.current.applyOptions({
+      priceFormat: { type: 'price', ...fmt },
+    })
+
+    candleSeriesRef.current.setData(safeCandles)
+
+    const ma5Data = calcMA(closes, 5)
+      .map((v, i) =>
+        v !== null && Number.isFinite(times[i])
+          ? { time: times[i] as UTCTimestamp, value: v }
+          : null
+      )
+      .filter(
+        (v): v is { time: UTCTimestamp; value: number } =>
+          !!v && Number.isFinite(v.time) && Number.isFinite(v.value)
+      )
+      .sort((a, b) => a.time - b.time)
+
+    const ma20Data = calcMA(closes, 20)
+      .map((v, i) =>
+        v !== null && Number.isFinite(times[i])
+          ? { time: times[i] as UTCTimestamp, value: v }
+          : null
+      )
+      .filter(
+        (v): v is { time: UTCTimestamp; value: number } =>
+          !!v && Number.isFinite(v.time) && Number.isFinite(v.value)
+      )
+      .sort((a, b) => a.time - b.time)
+
+    const ma60Data = calcMA(closes, 60)
+      .map((v, i) =>
+        v !== null && Number.isFinite(times[i])
+          ? { time: times[i] as UTCTimestamp, value: v }
+          : null
+      )
+      .filter(
+        (v): v is { time: UTCTimestamp; value: number } =>
+          !!v && Number.isFinite(v.time) && Number.isFinite(v.value)
+      )
+      .sort((a, b) => a.time - b.time)
+
+    ma5Ref.current?.setData(ma5Data)
+    ma20Ref.current?.setData(ma20Data)
+    ma60Ref.current?.setData(ma60Data)
 
     if (!initializedRef.current) {
-      const lastPrice = candles[candles.length - 1].close
-      const fmt = getPriceFormat(lastPrice)
-      candleSeriesRef.current.applyOptions({ priceFormat: { type: 'price', ...fmt } })
-
-      candleSeriesRef.current.setData(candles)
-
-      const ma5Data  = calcMA(closes, 5).map((v, i)  => v !== null ? { time: times[i], value: v } : null).filter(Boolean)
-      const ma20Data = calcMA(closes, 20).map((v, i) => v !== null ? { time: times[i], value: v } : null).filter(Boolean)
-      const ma60Data = calcMA(closes, 60).map((v, i) => v !== null ? { time: times[i], value: v } : null).filter(Boolean)
-
-      ma5Ref.current?.setData(ma5Data as never)
-      ma20Ref.current?.setData(ma20Data as never)
-      ma60Ref.current?.setData(ma60Data as never)
-
       chartInstanceRef.current?.timeScale().scrollToRealTime()
       initializedRef.current = true
-    } else {
-      const last = candles[candles.length - 1]
-      candleSeriesRef.current.update(last)
-
-      const ma5Val  = closes.slice(-5).reduce((a, b)  => a + b, 0) / Math.min(closes.length, 5)
-      const ma20Val = closes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(closes.length, 20)
-      const ma60Val = closes.slice(-60).reduce((a, b) => a + b, 0) / Math.min(closes.length, 60)
-
-      ma5Ref.current?.update({ time: last.time, value: ma5Val })
-      ma20Ref.current?.update({ time: last.time, value: ma20Val })
-      ma60Ref.current?.update({ time: last.time, value: ma60Val })
     }
-  }, [candles])
+  }, [safeCandles])
 
-  // 포지션 진입가 수평선 표시
   useEffect(() => {
     if (!candleSeriesRef.current) return
 
     priceLinesRef.current.forEach(line => {
-      try { candleSeriesRef.current?.removePriceLine(line) } catch {}
+      try {
+        candleSeriesRef.current?.removePriceLine(line)
+      } catch {}
     })
     priceLinesRef.current = []
 
-    const symbolPositions = positions.filter(p => p.symbol === symbol)
+    const normalizedSymbol = symbol.includes('-')
+      ? symbol.replace('-', '')
+      : symbol
+
+    const symbolPositions = positions.filter(p => {
+      const posSymbol = p.symbol.includes('-')
+        ? p.symbol.replace('-', '')
+        : p.symbol
+      return posSymbol === normalizedSymbol
+    })
 
     symbolPositions.forEach(pos => {
       const isLong = pos.type === 'long'
-      const color  = isLong ? '#00d4aa' : '#ff4d6a'
-      const label  = `${isLong ? '🟢 롱' : '🔴 숏'} ${pos.leverage}x | 진입가 ${pos.entryPrice.toLocaleString('en-US', { maximumFractionDigits: 4 })}`
+      const color = isLong ? '#00d4aa' : '#ff4d6a'
+      const label = `${isLong ? '🟢 롱' : '🔴 숏'} ${pos.leverage}x | 진입가 ${pos.entryPrice.toLocaleString('en-US', { maximumFractionDigits: 4 })}`
 
       const line = candleSeriesRef.current!.createPriceLine({
-        price:            pos.entryPrice,
+        price: pos.entryPrice,
         color,
-        lineWidth:        1,
-        lineStyle:        1,
+        lineWidth: 1,
+        lineStyle: 1,
         axisLabelVisible: true,
-        title:            label,
+        title: label,
       })
+
       priceLinesRef.current.push(line)
     })
   }, [positions, symbol])
 
-  // MA 표시/숨김
-  useEffect(() => { ma5Ref.current?.applyOptions({ visible: showMA5 }) },   [showMA5])
+  useEffect(() => { ma5Ref.current?.applyOptions({ visible: showMA5 }) }, [showMA5])
   useEffect(() => { ma20Ref.current?.applyOptions({ visible: showMA20 }) }, [showMA20])
   useEffect(() => { ma60Ref.current?.applyOptions({ visible: showMA60 }) }, [showMA60])
 
   return (
     <div style={{ width: '100%', height: '100%', minHeight: '400px', display: 'flex', flexDirection: 'column' }}>
-
-      {/* 상단 툴바 */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -239,7 +330,7 @@ export default function Chart({ symbol = 'BTCUSDT', positions = [] }: { symbol?:
 
         <div style={{ display: 'flex', gap: '8px' }}>
           {[
-            { label: 'MA5',  color: '#f0b90b', show: showMA5,  setShow: setShowMA5  },
+            { label: 'MA5', color: '#f0b90b', show: showMA5, setShow: setShowMA5 },
             { label: 'MA20', color: '#7b61ff', show: showMA20, setShow: setShowMA20 },
             { label: 'MA60', color: '#ff4d6a', show: showMA60, setShow: setShowMA60 },
           ].map(ma => (
@@ -263,7 +354,6 @@ export default function Chart({ symbol = 'BTCUSDT', positions = [] }: { symbol?:
         </div>
       </div>
 
-      {/* 차트 영역 */}
       <div style={{ flex: 1, minHeight: '300px' }} ref={chartRef} />
     </div>
   )

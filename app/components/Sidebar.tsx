@@ -20,49 +20,51 @@ export default function Sidebar({ selectedSymbol, onSelect }: SidebarProps) {
 
   // 1. 초기 코인 목록
   useEffect(() => {
-  fetch('/api/ticker')
-    .then(res => res.json())
-    .then(data => {
-      const usdt = data
-        .filter((d: { symbol: string }) => d.symbol.endsWith('USDT'))
-        .sort((a: { quoteVolume: string }, b: { quoteVolume: string }) =>
-          parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume)
-        )
-        .slice(0, 100)
-        .map((d: { symbol: string; lastPrice: string; priceChangePercent: string }) => ({
-          symbol: d.symbol,
-          name:   d.symbol.replace('USDT', ''),
-          price:  parseFloat(d.lastPrice),
-          change: parseFloat(d.priceChangePercent),
-        }))
-      setCoins(usdt)
-    })
-}, [])
-
-  // 2. 실시간 업데이트
-  useEffect(() => {
-  if (!coins.length) return
-  const interval = setInterval(() => {
     fetch('/api/ticker')
       .then(res => res.json())
       .then(data => {
-        const map: Record<string, { lastPrice: string; priceChangePercent: string }> = {}
-        data.forEach((d: { symbol: string; lastPrice: string; priceChangePercent: string }) => {
-          map[d.symbol] = d
-        })
-        setCoins(prev => prev.map(coin => {
-          const update = map[coin.symbol]
-          if (!update) return coin
-          return {
-            ...coin,
-            price:  parseFloat(update.lastPrice),
-            change: parseFloat(update.priceChangePercent),
-          }
-        }))
+        if (!Array.isArray(data)) return
+        const usdt = data
+          .filter((d: { symbol: string }) => d.symbol.endsWith('-USDT'))
+          .sort((a: { volCcy24h: number }, b: { volCcy24h: number }) =>
+            b.volCcy24h - a.volCcy24h
+          )
+          .slice(0, 100)
+          .map((d: { symbol: string; lastPrice: number; change24h: number }) => ({
+            symbol: d.symbol,
+            name:   d.symbol.replace('-USDT', ''),
+            price:  d.lastPrice,
+            change: d.change24h,
+          }))
+        setCoins(usdt)
       })
-  }, 3000)
-  return () => clearInterval(interval)
-}, [coins.length])
+  }, [])
+
+  // 2. 실시간 업데이트
+  useEffect(() => {
+    if (!coins.length) return
+    const interval = setInterval(() => {
+      fetch('/api/ticker')
+        .then(res => res.json())
+        .then(data => {
+          if (!Array.isArray(data)) return
+          const map: Record<string, { lastPrice: number; change24h: number }> = {}
+          data.forEach((d: { symbol: string; lastPrice: number; change24h: number }) => {
+            map[d.symbol] = d
+          })
+          setCoins(prev => prev.map(coin => {
+            const update = map[coin.symbol]
+            if (!update) return coin
+            return {
+              ...coin,
+              price:  update.lastPrice,
+              change: update.change24h,
+            }
+          }))
+        })
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [coins.length])
 
   const filtered = coins.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
@@ -129,7 +131,6 @@ export default function Sidebar({ selectedSymbol, onSelect }: SidebarProps) {
               background: selectedSymbol === coin.symbol ? '#1a1d25' : 'transparent',
             }}
           >
-            {/* 아이콘 */}
             <div style={{
               width: '24px', height: '24px',
               borderRadius: '50%',
@@ -141,7 +142,6 @@ export default function Sidebar({ selectedSymbol, onSelect }: SidebarProps) {
               {coin.name.slice(0, 2)}
             </div>
 
-            {/* 이름 + 가격 */}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '12px', fontWeight: '500', color: 'white' }}>
                 {coin.name}
@@ -151,7 +151,6 @@ export default function Sidebar({ selectedSymbol, onSelect }: SidebarProps) {
               </div>
             </div>
 
-            {/* 변동률 */}
             <div style={{
               fontSize: '10px',
               fontWeight: 'bold',

@@ -26,7 +26,7 @@ type MobileTab = 'chart' | 'orderbook' | 'order' | 'positions'
 
 function HomeContent() {
   const searchParams  = useSearchParams()
-  const initialSymbol = searchParams.get('symbol') ?? 'BTCUSDT'
+  const initialSymbol = searchParams.get('symbol') ?? 'BTC-USDT'
 
   const [selectedSymbol, setSelectedSymbol] = useState(initialSymbol)
   const [currentPrice, setCurrentPrice]     = useState(0)

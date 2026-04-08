@@ -11,17 +11,17 @@ export function useBinancePrice(
 
   useEffect(() => {
     const update = () => {
-      fetch(`/api/price?symbol=${symbol}`)
+      fetch(`/api/ticker?symbol=${symbol}`)
         .then(res => res.json())
         .then(data => {
           if (!data.lastPrice) return
-          const price  = parseFloat(data.lastPrice)
-          const change = parseFloat(data.priceChangePercent)
+          const price  = data.lastPrice as number
+          const change = data.change24h as number
           const isUp   = change >= 0
 
           if (priceRef.current) {
             priceRef.current.textContent = price.toLocaleString('en-US', {
-              maximumFractionDigits: 2,
+              maximumFractionDigits: 4,
             })
           }
           if (changeRef.current) {
@@ -31,8 +31,8 @@ export function useBinancePrice(
         })
     }
 
-    update() // 즉시 1회 실행
-    pollingRef.current = setInterval(update, 2000) // 2초마다 갱신
+    update()
+    pollingRef.current = setInterval(update, 2000)
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current)
